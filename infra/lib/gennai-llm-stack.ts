@@ -108,10 +108,32 @@ export class GennaiLlmStack extends cdk.Stack {
     // ----------------------------------------------------------------
     // NLB (Internal) — fronting the EC2 instance
     // ----------------------------------------------------------------
+    const nlbSg = new ec2.SecurityGroup(this, "NlbSecurityGroup", {
+      vpc,
+      description: "NLB security group for vLLM API",
+      allowAllOutbound: false,
+    });
+
+    // Allow API Gateway VPC Link to reach NLB on port 80
+    // REST API VPC Link traffic originates from AWS internal network, not VPC CIDR
+    nlbSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      "Allow API Gateway VPC Link traffic"
+    );
+
+    // Allow NLB to forward traffic and health checks to vLLM targets
+    nlbSg.addEgressRule(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcp(VLLM_PORT),
+      "Allow traffic to vLLM targets"
+    );
+
     const nlb = new elbv2.NetworkLoadBalancer(this, "Nlb", {
       vpc,
       internetFacing: false,
       crossZoneEnabled: true,
+      securityGroups: [nlbSg],
     });
 
     const targetGroup = new elbv2.NetworkTargetGroup(this, "VllmTg", {
