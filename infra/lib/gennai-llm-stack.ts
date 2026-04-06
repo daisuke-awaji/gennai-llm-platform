@@ -89,7 +89,7 @@ export class GennaiLlmStack extends cdk.Stack {
     const instance = new ec2.Instance(this, "VllmInstance", {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: new ec2.InstanceType("g5.xlarge"),
+      instanceType: new ec2.InstanceType("g6e.xlarge"),
       machineImage: ami,
       securityGroup: instanceSg,
       role: instanceRole,
