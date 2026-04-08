@@ -17,7 +17,8 @@ interface ModelConfig {
   tensorParallelSize: number;
   maxModelLen: number;
   ebsSizeGb: number;
-  extraVllmArgs: string;
+  gated?: boolean;
+  extraVllmArgs?: string;
 }
 
 const MODEL_CONFIGS: ModelConfig[] = [
@@ -30,7 +31,6 @@ const MODEL_CONFIGS: ModelConfig[] = [
     tensorParallelSize: 1,
     maxModelLen: 8192,
     ebsSizeGb: 200,
-    extraVllmArgs: "",
   },
   {
     modelId: "meta-llama/Llama-3.3-70B-Instruct",
@@ -41,6 +41,7 @@ const MODEL_CONFIGS: ModelConfig[] = [
     tensorParallelSize: 2,
     maxModelLen: 8192,
     ebsSizeGb: 500,
+    gated: true,
     extraVllmArgs: "--dtype bfloat16",
   },
 ];
@@ -81,6 +82,18 @@ export class GennaiLlmStack extends cdk.Stack {
           "AmazonSSMManagedInstanceCore"
         ),
       ],
+      inlinePolicies: {
+        HfTokenAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ["ssm:GetParameter"],
+              resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/gennai/hf-token`,
+              ],
+            }),
+          ],
+        }),
+      },
     });
 
     const ami = ec2.MachineImage.lookup({
@@ -122,9 +135,6 @@ export class GennaiLlmStack extends cdk.Stack {
     const instances: Record<string, ec2.Instance> = {};
 
     for (const cfg of MODEL_CONFIGS) {
-      const suffix = cfg.routePrefix.replace(/-/g, "");
-
-      // UserData
       const userData = ec2.UserData.forLinux();
       const tpArg =
         cfg.tensorParallelSize > 1
@@ -133,7 +143,6 @@ export class GennaiLlmStack extends cdk.Stack {
       const extraArgs = [tpArg, cfg.extraVllmArgs].filter(Boolean).join(" ");
 
       userData.addCommands(
-        "#!/bin/bash",
         "set -euxo pipefail",
         "pip install -U pip",
         "pip install vllm",
@@ -146,6 +155,9 @@ export class GennaiLlmStack extends cdk.Stack {
         "Type=simple",
         "User=root",
         `Environment="HF_HOME=/opt/huggingface"`,
+        ...(cfg.gated
+          ? [`EnvironmentFile=-/etc/default/vllm`]
+          : []),
         `ExecStart=/usr/local/bin/vllm serve ${cfg.modelId} --host 0.0.0.0 --port ${VLLM_PORT} --served-model-name ${cfg.servedModelName} --max-model-len ${cfg.maxModelLen} --gpu-memory-utilization 0.90 ${extraArgs}`,
         "Restart=always",
         "RestartSec=10",
@@ -153,13 +165,20 @@ export class GennaiLlmStack extends cdk.Stack {
         "[Install]",
         "WantedBy=multi-user.target",
         "EOF",
+        ...(cfg.gated
+          ? [
+              `HF_TOKEN=$(aws ssm get-parameter --name /gennai/hf-token --with-decryption --query Parameter.Value --output text --region ${this.region})`,
+              `echo "HF_TOKEN=$HF_TOKEN" > /etc/default/vllm`,
+              "chmod 600 /etc/default/vllm",
+            ]
+          : []),
         "systemctl daemon-reload",
         "systemctl enable vllm",
         "systemctl start vllm"
       );
 
       // EC2 Instance
-      const instance = new ec2.Instance(this, `VllmInstance-${suffix}`, {
+      const instance = new ec2.Instance(this, `VllmInstance-${cfg.routePrefix}`, {
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         instanceType: new ec2.InstanceType(cfg.instanceType),
@@ -180,7 +199,7 @@ export class GennaiLlmStack extends cdk.Stack {
       instances[cfg.routePrefix] = instance;
 
       // NLB Target Group + Listener
-      const tg = new elbv2.NetworkTargetGroup(this, `VllmTg-${suffix}`, {
+      const tg = new elbv2.NetworkTargetGroup(this, `VllmTg-${cfg.routePrefix}`, {
         vpc,
         port: VLLM_PORT,
         protocol: elbv2.Protocol.TCP,
@@ -195,13 +214,15 @@ export class GennaiLlmStack extends cdk.Stack {
         },
       });
 
+      // REST API VPC Link creates ENIs within AWS-managed network space,
+      // not necessarily within VPC CIDR — use anyIpv4 for compatibility
       nlbSg.addIngressRule(
         ec2.Peer.anyIpv4(),
         ec2.Port.tcp(cfg.nlbListenerPort),
         `Allow API Gateway VPC Link traffic for ${cfg.routePrefix}`
       );
 
-      nlb.addListener(`Listener-${suffix}`, {
+      nlb.addListener(`Listener-${cfg.routePrefix}`, {
         port: cfg.nlbListenerPort,
         defaultTargetGroups: [tg],
       });
@@ -220,8 +241,6 @@ export class GennaiLlmStack extends cdk.Stack {
       apiKeySourceType: apigateway.ApiKeySourceType.HEADER,
       deployOptions: {
         stageName: "v1",
-        throttlingRateLimit: 100,
-        throttlingBurstLimit: 50,
       },
     });
 
@@ -249,19 +268,13 @@ export class GennaiLlmStack extends cdk.Stack {
       });
 
       const proxyResource = modelResource.addProxy({
-        anyMethod: false,
+        anyMethod: true,
         defaultIntegration: integration,
         defaultMethodOptions: {
           apiKeyRequired: true,
           requestParameters: {
             "method.request.path.proxy": true,
           },
-        },
-      });
-      proxyResource.addMethod("ANY", integration, {
-        apiKeyRequired: true,
-        requestParameters: {
-          "method.request.path.proxy": true,
         },
       });
 
@@ -281,19 +294,24 @@ export class GennaiLlmStack extends cdk.Stack {
       );
     }
 
-    // Root health check
+    // Root health check — returns 200 OK (not tied to any specific model)
     api.root.addMethod(
       "GET",
-      new apigateway.Integration({
-        type: apigateway.IntegrationType.HTTP_PROXY,
-        integrationHttpMethod: "GET",
-        uri: `http://${nlb.loadBalancerDnsName}/health`,
-        options: {
-          connectionType: apigateway.ConnectionType.VPC_LINK,
-          vpcLink,
-        },
+      new apigateway.MockIntegration({
+        requestTemplates: { "application/json": '{"statusCode": 200}' },
+        integrationResponses: [
+          {
+            statusCode: "200",
+            responseTemplates: {
+              "application/json": '{"status":"ok","models":["gpt-oss-20b","llama-3.3-70b"]}',
+            },
+          },
+        ],
       }),
-      { apiKeyRequired: false }
+      {
+        apiKeyRequired: false,
+        methodResponses: [{ statusCode: "200" }],
+      }
     );
 
     // ----------------------------------------------------------------
