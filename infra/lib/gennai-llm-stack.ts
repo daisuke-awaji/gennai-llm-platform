@@ -37,7 +37,7 @@ const MODEL_CONFIGS: ModelConfig[] = [
     servedModelName: "llama-3.3-70b",
     routePrefix: "llama-3.3-70b",
     instanceType: "g7e.12xlarge",
-    nlbListenerPort: 81,
+    nlbListenerPort: 8080,
     tensorParallelSize: 2,
     maxModelLen: 8192,
     ebsSizeGb: 500,
