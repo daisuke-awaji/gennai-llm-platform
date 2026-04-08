@@ -2,5 +2,8 @@ node_modules/
 *.js
 *.d.ts
 *.js.map
-cdk.out/
+cdk.out*/
 .cdk.staging/
+eval_results/
+eval.sh
+test_api.py
