@@ -6,8 +6,44 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 
-const MODEL_ID = "openai/gpt-oss-20b";
 const VLLM_PORT = 8000;
+
+interface ModelConfig {
+  modelId: string;
+  servedModelName: string;
+  routePrefix: string;
+  instanceType: string;
+  nlbListenerPort: number;
+  tensorParallelSize: number;
+  maxModelLen: number;
+  ebsSizeGb: number;
+  extraVllmArgs: string;
+}
+
+const MODEL_CONFIGS: ModelConfig[] = [
+  {
+    modelId: "openai/gpt-oss-20b",
+    servedModelName: "gpt-oss-20b",
+    routePrefix: "gpt-oss-20b",
+    instanceType: "g7e.4xlarge",
+    nlbListenerPort: 80,
+    tensorParallelSize: 1,
+    maxModelLen: 8192,
+    ebsSizeGb: 200,
+    extraVllmArgs: "",
+  },
+  {
+    modelId: "meta-llama/Llama-3.3-70B-Instruct",
+    servedModelName: "llama-3.3-70b",
+    routePrefix: "llama-3.3-70b",
+    instanceType: "g7e.12xlarge",
+    nlbListenerPort: 81,
+    tensorParallelSize: 2,
+    maxModelLen: 8192,
+    ebsSizeGb: 500,
+    extraVllmArgs: "--dtype bfloat16",
+  },
+];
 
 export class GennaiLlmStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -30,11 +66,11 @@ export class GennaiLlmStack extends cdk.Stack {
     });
 
     // ----------------------------------------------------------------
-    // EC2 — GPU instance running vLLM
+    // Shared resources
     // ----------------------------------------------------------------
     const instanceSg = new ec2.SecurityGroup(this, "InstanceSg", {
       vpc,
-      description: "vLLM inference server",
+      description: "vLLM inference servers",
       allowAllOutbound: true,
     });
 
@@ -47,66 +83,19 @@ export class GennaiLlmStack extends cdk.Stack {
       ],
     });
 
-    const userData = ec2.UserData.forLinux();
-    userData.addCommands(
-      "#!/bin/bash",
-      "set -euxo pipefail",
-
-      // Install NVIDIA drivers + CUDA (Deep Learning AMI already has them)
-      // Install vLLM
-      "pip install -U pip",
-      "pip install vllm",
-
-      // Create systemd service for vLLM
-      `cat > /etc/systemd/system/vllm.service << 'EOF'`,
-      "[Unit]",
-      "Description=vLLM OpenAI-compatible server",
-      "After=network.target",
-      "",
-      "[Service]",
-      "Type=simple",
-      "User=root",
-      `Environment="HF_HOME=/opt/huggingface"`,
-      `ExecStart=/usr/local/bin/vllm serve ${MODEL_ID} --host 0.0.0.0 --port ${VLLM_PORT} --served-model-name gpt-oss-20b --max-model-len 8192 --gpu-memory-utilization 0.90`,
-      "Restart=always",
-      "RestartSec=10",
-      "",
-      "[Install]",
-      "WantedBy=multi-user.target",
-      "EOF",
-
-      "systemctl daemon-reload",
-      "systemctl enable vllm",
-      "systemctl start vllm"
-    );
-
-    // Use Deep Learning AMI (NVIDIA GPU-Optimized)
     const ami = ec2.MachineImage.lookup({
       name: "Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04)*",
       owners: ["amazon"],
     });
 
-    const instance = new ec2.Instance(this, "VllmInstance", {
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: new ec2.InstanceType("g6e.xlarge"),
-      machineImage: ami,
-      securityGroup: instanceSg,
-      role: instanceRole,
-      userData,
-      blockDevices: [
-        {
-          deviceName: "/dev/sda1",
-          volume: ec2.BlockDeviceVolume.ebs(200, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
-          }),
-        },
-      ],
-    });
+    instanceSg.addIngressRule(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcp(VLLM_PORT),
+      "Allow NLB health checks and traffic"
+    );
 
     // ----------------------------------------------------------------
-    // NLB (Internal) — fronting the EC2 instance
+    // NLB (Internal)
     // ----------------------------------------------------------------
     const nlbSg = new ec2.SecurityGroup(this, "NlbSecurityGroup", {
       vpc,
@@ -114,15 +103,6 @@ export class GennaiLlmStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow API Gateway VPC Link to reach NLB on port 80
-    // REST API VPC Link traffic originates from AWS internal network, not VPC CIDR
-    nlbSg.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      "Allow API Gateway VPC Link traffic"
-    );
-
-    // Allow NLB to forward traffic and health checks to vLLM targets
     nlbSg.addEgressRule(
       ec2.Peer.ipv4(vpc.vpcCidrBlock),
       ec2.Port.tcp(VLLM_PORT),
@@ -136,32 +116,96 @@ export class GennaiLlmStack extends cdk.Stack {
       securityGroups: [nlbSg],
     });
 
-    const targetGroup = new elbv2.NetworkTargetGroup(this, "VllmTg", {
-      vpc,
-      port: VLLM_PORT,
-      protocol: elbv2.Protocol.TCP,
-      targets: [new elbv2Targets.InstanceTarget(instance, VLLM_PORT)],
-      healthCheck: {
-        protocol: elbv2.Protocol.HTTP,
-        path: "/health",
-        port: String(VLLM_PORT),
-        interval: cdk.Duration.seconds(30),
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-      },
-    });
+    // ----------------------------------------------------------------
+    // Per-model: EC2 instance + NLB listener/target group
+    // ----------------------------------------------------------------
+    const instances: Record<string, ec2.Instance> = {};
 
-    nlb.addListener("TcpListener", {
-      port: 80,
-      defaultTargetGroups: [targetGroup],
-    });
+    for (const cfg of MODEL_CONFIGS) {
+      const suffix = cfg.routePrefix.replace(/-/g, "");
 
-    // Allow NLB health checks
-    instanceSg.addIngressRule(
-      ec2.Peer.ipv4(vpc.vpcCidrBlock),
-      ec2.Port.tcp(VLLM_PORT),
-      "Allow NLB health checks and traffic"
-    );
+      // UserData
+      const userData = ec2.UserData.forLinux();
+      const tpArg =
+        cfg.tensorParallelSize > 1
+          ? `--tensor-parallel-size ${cfg.tensorParallelSize}`
+          : "";
+      const extraArgs = [tpArg, cfg.extraVllmArgs].filter(Boolean).join(" ");
+
+      userData.addCommands(
+        "#!/bin/bash",
+        "set -euxo pipefail",
+        "pip install -U pip",
+        "pip install vllm",
+        `cat > /etc/systemd/system/vllm.service << 'EOF'`,
+        "[Unit]",
+        "Description=vLLM OpenAI-compatible server",
+        "After=network.target",
+        "",
+        "[Service]",
+        "Type=simple",
+        "User=root",
+        `Environment="HF_HOME=/opt/huggingface"`,
+        `ExecStart=/usr/local/bin/vllm serve ${cfg.modelId} --host 0.0.0.0 --port ${VLLM_PORT} --served-model-name ${cfg.servedModelName} --max-model-len ${cfg.maxModelLen} --gpu-memory-utilization 0.90 ${extraArgs}`,
+        "Restart=always",
+        "RestartSec=10",
+        "",
+        "[Install]",
+        "WantedBy=multi-user.target",
+        "EOF",
+        "systemctl daemon-reload",
+        "systemctl enable vllm",
+        "systemctl start vllm"
+      );
+
+      // EC2 Instance
+      const instance = new ec2.Instance(this, `VllmInstance-${suffix}`, {
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        instanceType: new ec2.InstanceType(cfg.instanceType),
+        machineImage: ami,
+        securityGroup: instanceSg,
+        role: instanceRole,
+        userData,
+        blockDevices: [
+          {
+            deviceName: "/dev/sda1",
+            volume: ec2.BlockDeviceVolume.ebs(cfg.ebsSizeGb, {
+              volumeType: ec2.EbsDeviceVolumeType.GP3,
+              encrypted: true,
+            }),
+          },
+        ],
+      });
+      instances[cfg.routePrefix] = instance;
+
+      // NLB Target Group + Listener
+      const tg = new elbv2.NetworkTargetGroup(this, `VllmTg-${suffix}`, {
+        vpc,
+        port: VLLM_PORT,
+        protocol: elbv2.Protocol.TCP,
+        targets: [new elbv2Targets.InstanceTarget(instance, VLLM_PORT)],
+        healthCheck: {
+          protocol: elbv2.Protocol.HTTP,
+          path: "/health",
+          port: String(VLLM_PORT),
+          interval: cdk.Duration.seconds(30),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+      });
+
+      nlbSg.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(cfg.nlbListenerPort),
+        `Allow API Gateway VPC Link traffic for ${cfg.routePrefix}`
+      );
+
+      nlb.addListener(`Listener-${suffix}`, {
+        port: cfg.nlbListenerPort,
+        defaultTargetGroups: [tg],
+      });
+    }
 
     // ----------------------------------------------------------------
     // API Gateway — REST API with Response Streaming
@@ -169,7 +213,7 @@ export class GennaiLlmStack extends cdk.Stack {
     const api = new apigateway.RestApi(this, "LlmApi", {
       restApiName: "gennai-llm-api",
       description:
-        "OpenAI-compatible LLM API with SSE Streaming (Response Streaming)",
+        "Multi-model OpenAI-compatible LLM API with SSE Streaming (Response Streaming)",
       endpointConfiguration: {
         types: [apigateway.EndpointType.REGIONAL],
       },
@@ -181,52 +225,69 @@ export class GennaiLlmStack extends cdk.Stack {
       },
     });
 
-    // VPC Link for private integration
     const vpcLink = new apigateway.VpcLink(this, "VpcLink", {
       targets: [nlb],
       description: "VPC Link to internal NLB for vLLM",
     });
 
-    // Integration: HTTP_PROXY through VPC Link with Response Streaming
-    const integration = new apigateway.Integration({
-      type: apigateway.IntegrationType.HTTP_PROXY,
-      integrationHttpMethod: "ANY",
-      uri: `http://${nlb.loadBalancerDnsName}/{proxy}`,
-      options: {
-        connectionType: apigateway.ConnectionType.VPC_LINK,
-        vpcLink,
-        requestParameters: {
-          "integration.request.path.proxy": "method.request.path.proxy",
-        },
-        responseTransferMode: apigateway.ResponseTransferMode.STREAM,
-      },
-    });
+    // Per-model route: /{routePrefix}/{proxy+}
+    for (const cfg of MODEL_CONFIGS) {
+      const modelResource = api.root.addResource(cfg.routePrefix);
 
-    // Catch-all: ANY /{proxy+}
-    const proxyResource = api.root.addProxy({
-      anyMethod: false,
-      defaultIntegration: integration,
-      defaultMethodOptions: {
+      const integration = new apigateway.Integration({
+        type: apigateway.IntegrationType.HTTP_PROXY,
+        integrationHttpMethod: "ANY",
+        uri: `http://${nlb.loadBalancerDnsName}:${cfg.nlbListenerPort}/{proxy}`,
+        options: {
+          connectionType: apigateway.ConnectionType.VPC_LINK,
+          vpcLink,
+          requestParameters: {
+            "integration.request.path.proxy": "method.request.path.proxy",
+          },
+          responseTransferMode: apigateway.ResponseTransferMode.STREAM,
+        },
+      });
+
+      const proxyResource = modelResource.addProxy({
+        anyMethod: false,
+        defaultIntegration: integration,
+        defaultMethodOptions: {
+          apiKeyRequired: true,
+          requestParameters: {
+            "method.request.path.proxy": true,
+          },
+        },
+      });
+      proxyResource.addMethod("ANY", integration, {
         apiKeyRequired: true,
         requestParameters: {
           "method.request.path.proxy": true,
         },
-      },
-    });
-    proxyResource.addMethod("ANY", integration, {
-      apiKeyRequired: true,
-      requestParameters: {
-        "method.request.path.proxy": true,
-      },
-    });
+      });
 
-    // Root path (GET / for health check)
+      // Health check on model root: GET /{routePrefix}/
+      modelResource.addMethod(
+        "GET",
+        new apigateway.Integration({
+          type: apigateway.IntegrationType.HTTP_PROXY,
+          integrationHttpMethod: "GET",
+          uri: `http://${nlb.loadBalancerDnsName}:${cfg.nlbListenerPort}/health`,
+          options: {
+            connectionType: apigateway.ConnectionType.VPC_LINK,
+            vpcLink,
+          },
+        }),
+        { apiKeyRequired: false }
+      );
+    }
+
+    // Root health check
     api.root.addMethod(
       "GET",
       new apigateway.Integration({
         type: apigateway.IntegrationType.HTTP_PROXY,
         integrationHttpMethod: "GET",
-        uri: `http://${nlb.loadBalancerDnsName}/`,
+        uri: `http://${nlb.loadBalancerDnsName}/health`,
         options: {
           connectionType: apigateway.ConnectionType.VPC_LINK,
           vpcLink,
@@ -265,22 +326,23 @@ export class GennaiLlmStack extends cdk.Stack {
         "API Key ID (retrieve value with: aws apigateway get-api-key --api-key <id> --include-value)",
     });
 
-    new cdk.CfnOutput(this, "InstanceId", {
-      value: instance.instanceId,
-      description: "EC2 Instance ID (connect via SSM Session Manager)",
-    });
+    for (const cfg of MODEL_CONFIGS) {
+      new cdk.CfnOutput(this, `InstanceId-${cfg.routePrefix}`, {
+        value: instances[cfg.routePrefix].instanceId,
+        description: `EC2 Instance ID for ${cfg.servedModelName} (${cfg.instanceType})`,
+      });
+    }
 
-    new cdk.CfnOutput(this, "TestCommand", {
-      value: [
-        "# 1. Get API Key value:",
-        `#    aws apigateway get-api-key --api-key \${API_KEY_ID} --include-value --query 'value' --output text`,
-        "# 2. Test chat completions (SSE Streaming):",
-        `#    curl -N ${api.url}v1/chat/completions \\`,
-        "#      -H 'Content-Type: application/json' \\",
-        "#      -H 'x-api-key: <YOUR_API_KEY>' \\",
-        '#      -d \'{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}],"stream":true}\'',
-      ].join("\n"),
-      description: "Test commands",
+    new cdk.CfnOutput(this, "TestCommands", {
+      value: MODEL_CONFIGS.map(
+        (cfg) =>
+          `# ${cfg.servedModelName} (${cfg.instanceType}):\n` +
+          `#   curl -N ${api.url}${cfg.routePrefix}/v1/chat/completions \\\n` +
+          `#     -H 'Content-Type: application/json' \\\n` +
+          `#     -H 'x-api-key: <YOUR_API_KEY>' \\\n` +
+          `#     -d '{"model":"${cfg.servedModelName}","messages":[{"role":"user","content":"Hello"}],"stream":true}'`
+      ).join("\n\n"),
+      description: "Test commands for each model",
     });
   }
 }
