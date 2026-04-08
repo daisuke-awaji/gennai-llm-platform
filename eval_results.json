@@ -1,0 +1,146 @@
+[
+  {
+    "content": "**日本の三権分立（立法・行政・司法）の役割（簡潔）**\n\n| 権力 | 主な役割 |\n|------|----------|\n| **立法（国会）** | 法律を制定・改正し、国の政策方針を決定。議員が国民の代表として意思決定を行う。 |\n| **行政（内閣・各省庁）** | 立法で定められた法律を実施し、行政サービスを提供。政策の実行と国の運営を担う。 |\n| **司法（裁判所）** | 法律の解釈・適用を行い、紛争を解決。権力の濫用を防ぎ、法の支配を守る。 |\n\n**チェック・バランス**",
+    "latency_ms": 1343,
+    "prompt_tokens": 98,
+    "completion_tokens": 300,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "01_ja_knowledge",
+    "category": "日本語知識"
+  },
+  {
+    "content": "日本の三権分立は、国家権力を三つの機関に分立し、相互に抑制し合うことで権力の濫用を防ぐ制度です。三権分立のそれぞれの役割は以下の通りです。\n\n1.  立法権（国会）：法律を作る権限を持ちます。国会は衆議院と参議院の二院制で構成され、法律の制定や改正を行います。\n2.  行政権（内閣）：法律を執行する権限を持ちます。内閣は総理大臣と国務大臣で構成され、国の行政を担当します。\n3.  司法権（最高裁判所）：法律の解釈や適用を担う権限を持ちます。最高裁判所は最高裁判所長官と最高裁判所判事で構成され、法律の違憲性や解釈を判断します。\n\nこれらの三権はそれぞれ独立し、相互に抑制し合うことで、権力のバランスを保ち、国民の権利と自由を守ります。",
+    "latency_ms": 13075,
+    "prompt_tokens": 43,
+    "completion_tokens": 259,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "01_ja_knowledge",
+    "category": "日本語知識"
+  },
+  {
+    "content": "**TCP (Transmission Control Protocol)**  \n- Connection‑oriented: establishes a session before data transfer.  \n- Reliable: guarantees delivery, ordering, and retransmission of lost packets.  \n- Flow and congestion control to avoid network overload.  \n- Higher overhead (handshake, acknowledgments, sequencing).  \n- Used where accuracy matters: web, email, file transfer, SSH, etc.\n\n**UDP (User Datagram Protocol)**  \n- Connectionless: sends packets (“datagrams”) without prior handshake.  \n- Unreliable: no guarantee of delivery, ordering, or duplicate suppression.  \n- Minimal overhead: no acknowledgments, no flow control.  \n- Faster and lower latency.  \n- Used where speed or real‑time is critical: VoIP, streaming, gaming, DNS, etc.",
+    "latency_ms": 1046,
+    "prompt_tokens": 91,
+    "completion_tokens": 231,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "02_en_knowledge",
+    "category": "英語知識"
+  },
+  {
+    "content": "Here's a concise explanation:\n\n**TCP (Transmission Control Protocol)**\n\n* Connection-oriented: Establishes a dedicated connection before data transfer\n* Reliable: Ensures data is delivered in the correct order, with error-checking and retransmission of lost packets\n* Ordered: Guarantees data is delivered in the same order it was sent\n* Slower: Due to overhead of establishing and maintaining connections\n\n**UDP (User Datagram Protocol)**\n\n* Connectionless: No dedicated connection is established before data transfer\n* Best-effort: Does not guarantee delivery, order, or error-free transmission\n* Faster: Less overhead, making it suitable for real-time applications like video streaming and online gaming\n\nIn summary, TCP prioritizes reliability and order, while UDP prioritizes speed and efficiency. Choose TCP for applications requiring guaranteed delivery, like file transfers, and UDP for applications requiring low latency, like video streaming.",
+    "latency_ms": 9252,
+    "prompt_tokens": 36,
+    "completion_tokens": 183,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "02_en_knowledge",
+    "category": "英語知識"
+  },
+  {
+    "content": "**解法（1回だけ部屋を移動する方法）**\n\n1. **スイッチAを入れたまま**  \n   - まずスイッチA（1番目）を入れ、数分（たとえば5〜10分）そのままにしておく。  \n   - その間に対応する電球は点灯し、熱がこもる。\n\n2. **スイッチAを切り、スイッチBを入れる**  \n   - スイッチAを切り、すぐにスイッチB（2番目）を入れる。  \n   - ここでスイッチBに対応する電球は点灯し、熱はほとんど残らない。\n\n3. **隣の部屋へ移動**  \n   - 以上の操作を終えたら、隣の部屋へ一度だけ移動する。\n\n4. **電球の状態を確認**  \n   - **点灯している電球** → スイッチB（2番目）に対応。  \n   - **消えているが熱い（触ってみて暖かい）電球** → スイッチA（1番目）に対応。  \n   - **消えているが冷たい電球** → スイッチC（3番目）に対応。\n\n---\n\n### なぜこの方法が機能するか",
+    "latency_ms": 2264,
+    "prompt_tokens": 160,
+    "completion_tokens": 500,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "03_reasoning",
+    "category": "論理的推論"
+  },
+  {
+    "content": "この問題は、情報を最小限に抑えながら、最大限の情報を得る方法を考える必要があります。ここでは、次の手順を実行します。\n\n1. スイッチ1をオンにします。\n2. そのまま5分待ちます。\n3. スイッチ1をオフにし、スイッチ2をオンにします。\n4. 隣の部屋に移動し、電球を確認します。\n\nここで、電球の状態を観察します。\n\n- 熱くて点灯している電球：スイッチ2に対応します。\n- 熱くて消灯している電球：スイッチ1に対応します。\n- 冷たくて点灯している電球：スイッチ3に対応します。\n- 冷たくて消灯している電球：スイッチのオン/オフを繰り返すことで対応を確認しますが、上記の方法ではスイッチ3に対応する電球は冷たくて消灯しているはずです。\n\nこの方法では、スイッチと電球の対応を1回の移動で確定できます。5分待つことで、電球が熱くなる時間を確保し、スイッチのオン/オフを最小限に抑えながら、必要な情報を得ることができます。",
+    "latency_ms": 14703,
+    "prompt_tokens": 93,
+    "completion_tokens": 292,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "03_reasoning",
+    "category": "論理的推論"
+  },
+  {
+    "content": "以下は、**リストから重複を除去しつつ元の順序を保持**する汎用関数です。  \n型ヒント（`TypeVar`）を付けているので、任意のハ",
+    "latency_ms": 2178,
+    "prompt_tokens": 125,
+    "completion_tokens": 500,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "04_code",
+    "category": "コード生成"
+  },
+  {
+    "content": "ここでは、Python で与えられたリストから重複を除去しつつ元の順序を保持する関数を書きます。型ヒントを含め、テストコードも提供します。\n\n```python\nfrom typing import List\n\ndef remove_duplicates(input_list: List) -> List:\n    \"\"\"\n    与えられたリストから重複を除去しつつ元の順序を保持する。\n\n    Args:\n        input_list (List): 入力リスト\n\n    Returns:\n        List: 重複を除去したリスト\n    \"\"\"\n    seen = set()  # すでに追加した要素を保持するセット\n    result = []  # 結果リスト\n\n    for item in input_list:\n        if item not in seen:  # 要素がセットにない場合\n            seen.add(item)  # セットに追加\n            result.append(item)  # 結果リストに追加\n\n    return result\n\n# テストコード\ntest_list = [1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9]\nprint(remove_duplicates(test_list))  # [1, 2, 3, 4, 5, 6, 7, 8, 9]\n```\n\nこの関数は、入力リストを順番に処理し、各要素がすでにセットに追加されていない場合にのみ結果リストに追加します。これにより、元の順序を保持しつつ重複を除去できます。型ヒントを使用することで、関数の入力と出力の型が明確になり、コードの読みやすさとメンテナンス性が向上します。テストコードでは、サンプルリストを使用して関数の動作を確認しています。",
+    "latency_ms": 20110,
+    "prompt_tokens": 64,
+    "completion_tokens": 399,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "04_code",
+    "category": "コード生成"
+  },
+  {
+    "content": null,
+    "latency_ms": 1335,
+    "prompt_tokens": 107,
+    "completion_tokens": 300,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "05_creative",
+    "category": "創作（日本語）"
+  },
+  {
+    "content": "ネオン輝く東京の街並みに、人工知能（AI）が溶け込んでいた。ロボットタクシーが走り、AIアシスタントが市民の生活を支える。ある日、老舗の和菓子屋に、AIパティシエが新たに加わった。伝統の技とAIの創造力が融合し、革新的な菓子が生まれた。店主の高齢女性は、AIと共に新しい伝統を築き始める。共存することで、東京の文化はさらに豊かになっていた。人々はAIと共に歩み、未来を創造していた。",
+    "latency_ms": 7869,
+    "prompt_tokens": 51,
+    "completion_tokens": 156,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "05_creative",
+    "category": "創作（日本語）"
+  },
+  {
+    "content": "量子コンピュータは量子ビットを用いて重ね合わせやエンタングルメントを活用し、従来のビットベースのコンピュータよりも特定の問題で大幅に高速化できる可能性があります。暗号解読や新薬開発、材料科学、最適化問題など多岐にわたる分野で革命的な変化が期待されています。現在はエラー率の高さやキュービットの安定性といった技術的課題が残る発",
+    "latency_ms": 909,
+    "prompt_tokens": 308,
+    "completion_tokens": 200,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "06_summarize",
+    "category": "要約"
+  },
+  {
+    "content": "量子コンピュータは量子力学の原理を利用し、量子ビット（キュービット）を用いて情報を処理するコンピュータです。従来のコンピュータを大幅に上回る計算速度を実現できる可能性があり、暗号解読や新薬開発など多くの分野で革命的な変化をもたらすと期待されています。しかし、エラー率の高さやキュービットの安定性など、多くの技術的課題が残っています。量子コンピュータはまだ発展途上にあります。量子コンピュータは特定の問題においては従来のコンピュータを大幅に上回る計算速度を実現できる可能性があります。量子コンピュータは多くの分野で革命的な変化をもたらすと期待されています。量子コン",
+    "latency_ms": 10101,
+    "prompt_tokens": 237,
+    "completion_tokens": 200,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "06_summarize",
+    "category": "要約"
+  },
+  {
+    "content": "**実質的な支払額**  \n**720円**\n\n---\n\n### 計算過程\n\n1. **定価**  \n   \\[\n",
+    "latency_ms": 1330,
+    "prompt_tokens": 129,
+    "completion_tokens": 300,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "07_math",
+    "category": "数学"
+  },
+  {
+    "content": "定価1000円の商品を20%引きで販売する場合、割引額は次のようになります。\n\n1000円 x 20% = 1000円 x 0.2 = 200円\n\nしたがって、割引後の価格は次のようになります。\n\n1000円 - 200円 = 800円\n\nさらに、その価格から10%のポイント還元がある場合、還元されるポイントは次のようになります。\n\n800円 x 10% = 800円 x 0.1 = 80円\n\n実質的な支払額は、割引後の価格からポイント還元額を引いたものになります。\n\n800円 - 80円 = 720円\n\nしたがって、実質的な支払額は720円になります。",
+    "latency_ms": 8625,
+    "prompt_tokens": 71,
+    "completion_tokens": 171,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "07_math",
+    "category": "数学"
+  },
+  {
+    "content": null,
+    "latency_ms": 914,
+    "prompt_tokens": 146,
+    "completion_tokens": 200,
+    "model": "gpt-oss-20b (g7e.4xlarge)",
+    "test_id": "08_instruction",
+    "category": "指示追従"
+  },
+  {
+    "content": "実は、ラーメンは日本で最も人気のある食べ物の一つです。実は、ラーメンのスープは豚骨や鶏ガラなどを長時間煮込んで作ることが多く、手間と時間がかかります。実は、有名なラーメン店では、1日に500杯以上のラーメンを提供することもあるそうです。",
+    "latency_ms": 4829,
+    "prompt_tokens": 82,
+    "completion_tokens": 95,
+    "model": "llama-3.1-70b-ja (g7e.12xlarge)",
+    "test_id": "08_instruction",
+    "category": "指示追従"
+  }
+]

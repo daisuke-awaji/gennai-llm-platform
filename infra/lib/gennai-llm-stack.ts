@@ -11,6 +11,7 @@ const VLLM_PORT = 8000;
 interface ModelConfig {
   modelId: string;
   servedModelName: string;
+  constructId: string;
   routePrefix: string;
   instanceType: string;
   nlbListenerPort: number;
@@ -25,6 +26,7 @@ const MODEL_CONFIGS: ModelConfig[] = [
   {
     modelId: "openai/gpt-oss-20b",
     servedModelName: "gpt-oss-20b",
+    constructId: "gpt-oss-20b",
     routePrefix: "gpt-oss-20b",
     instanceType: "g7e.4xlarge",
     nlbListenerPort: 80,
@@ -35,7 +37,8 @@ const MODEL_CONFIGS: ModelConfig[] = [
   {
     modelId: "cyberagent/Llama-3.1-70B-Japanese-Instruct-2407",
     servedModelName: "llama-3.1-70b-ja",
-    routePrefix: "llama-3.3-70b",
+    constructId: "llama-3.3-70b",
+    routePrefix: "llama-3.1-70b-ja",
     instanceType: "g7e.12xlarge",
     nlbListenerPort: 8080,
     tensorParallelSize: 2,
@@ -177,8 +180,8 @@ export class GennaiLlmStack extends cdk.Stack {
         "systemctl start vllm"
       );
 
-      // EC2 Instance
-      const instance = new ec2.Instance(this, `VllmInstance-${cfg.routePrefix}`, {
+      // EC2 Instance (constructId keeps CloudFormation resource stable)
+      const instance = new ec2.Instance(this, `VllmInstance-${cfg.constructId}`, {
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         instanceType: new ec2.InstanceType(cfg.instanceType),
@@ -196,10 +199,10 @@ export class GennaiLlmStack extends cdk.Stack {
           },
         ],
       });
-      instances[cfg.routePrefix] = instance;
+      instances[cfg.constructId] = instance;
 
-      // NLB Target Group + Listener
-      const tg = new elbv2.NetworkTargetGroup(this, `VllmTg-${cfg.routePrefix}`, {
+      // NLB Target Group + Listener (constructId keeps CloudFormation resource stable)
+      const tg = new elbv2.NetworkTargetGroup(this, `VllmTg-${cfg.constructId}`, {
         vpc,
         port: VLLM_PORT,
         protocol: elbv2.Protocol.TCP,
@@ -222,7 +225,7 @@ export class GennaiLlmStack extends cdk.Stack {
         `Allow API Gateway VPC Link traffic for ${cfg.routePrefix}`
       );
 
-      nlb.addListener(`Listener-${cfg.routePrefix}`, {
+      nlb.addListener(`Listener-${cfg.constructId}`, {
         port: cfg.nlbListenerPort,
         defaultTargetGroups: [tg],
       });
@@ -303,7 +306,7 @@ export class GennaiLlmStack extends cdk.Stack {
           {
             statusCode: "200",
             responseTemplates: {
-              "application/json": '{"status":"ok","models":["gpt-oss-20b","llama-3.3-70b"]}',
+              "application/json": '{"status":"ok","models":["gpt-oss-20b","llama-3.1-70b-ja"]}',
             },
           },
         ],
@@ -345,8 +348,8 @@ export class GennaiLlmStack extends cdk.Stack {
     });
 
     for (const cfg of MODEL_CONFIGS) {
-      new cdk.CfnOutput(this, `InstanceId-${cfg.routePrefix}`, {
-        value: instances[cfg.routePrefix].instanceId,
+      new cdk.CfnOutput(this, `InstanceId-${cfg.constructId}`, {
+        value: instances[cfg.constructId].instanceId,
         description: `EC2 Instance ID for ${cfg.servedModelName} (${cfg.instanceType})`,
       });
     }

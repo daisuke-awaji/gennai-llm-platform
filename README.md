@@ -11,8 +11,8 @@ Client / 源内
   ▼
 REST API Gateway (Regional, Response Streaming)
   │
-  ├── /gpt-oss-20b/{proxy+}   → VPC Link → NLB :80  → EC2 g7e.4xlarge  (gpt-oss-20b)
-  └── /llama-3.3-70b/{proxy+} → VPC Link → NLB :81  → EC2 g7e.12xlarge (Llama-3.3-70B-Instruct, TP=2)
+  ├── /gpt-oss-20b/{proxy+}      → VPC Link → NLB :80   → EC2 g7e.4xlarge  (gpt-oss-20b)
+  └── /llama-3.1-70b-ja/{proxy+} → VPC Link → NLB :8080 → EC2 g7e.12xlarge (Llama-3.1-70B-Japanese, TP=2)
 ```
 
 ## 使用モデル
@@ -42,8 +42,8 @@ curl -N https://<API_ID>.execute-api.<REGION>.amazonaws.com/v1/gpt-oss-20b/v1/ch
   -H "x-api-key: ${API_KEY}" \
   -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello, world!"}],"stream":true}'
 
-# Llama-3.3-70B (SSE Streaming)
-curl -N https://<API_ID>.execute-api.<REGION>.amazonaws.com/v1/llama-3.3-70b/v1/chat/completions \
+# Llama-3.1-70B-Japanese (SSE Streaming)
+curl -N https://<API_ID>.execute-api.<REGION>.amazonaws.com/v1/llama-3.1-70b-ja/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -H "x-api-key: ${API_KEY}" \
   -d '{"model":"llama-3.1-70b-ja","messages":[{"role":"user","content":"Hello, world!"}],"stream":true}'
