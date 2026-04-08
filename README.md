@@ -20,7 +20,7 @@ REST API Gateway (Regional, Response Streaming)
 | モデル | インスタンス | GPU | VRAM | 備考 |
 |---|---|---|---|---|
 | openai/gpt-oss-20b | g7e.4xlarge | 1× RTX PRO 6000 | 96 GB | 21B (MoE, Active ~3.6B), MXFP4 |
-| meta-llama/Llama-3.3-70B-Instruct | g7e.12xlarge | 2× RTX PRO 6000 | 192 GB | 70B, BF16, tensor-parallel-size=2 |
+| cyberagent/Llama-3.1-70B-Japanese-Instruct-2407 | g7e.12xlarge | 2× RTX PRO 6000 | 192 GB | 70B, BF16, tensor-parallel-size=2, 日本語特化 |
 
 ## デプロイ
 
@@ -46,7 +46,7 @@ curl -N https://<API_ID>.execute-api.<REGION>.amazonaws.com/v1/gpt-oss-20b/v1/ch
 curl -N https://<API_ID>.execute-api.<REGION>.amazonaws.com/v1/llama-3.3-70b/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -H "x-api-key: ${API_KEY}" \
-  -d '{"model":"llama-3.3-70b","messages":[{"role":"user","content":"Hello, world!"}],"stream":true}'
+  -d '{"model":"llama-3.1-70b-ja","messages":[{"role":"user","content":"Hello, world!"}],"stream":true}'
 ```
 
 ## クリーンアップ

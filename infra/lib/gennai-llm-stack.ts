@@ -33,15 +33,15 @@ const MODEL_CONFIGS: ModelConfig[] = [
     ebsSizeGb: 200,
   },
   {
-    modelId: "meta-llama/Llama-3.3-70B-Instruct",
-    servedModelName: "llama-3.3-70b",
+    modelId: "cyberagent/Llama-3.1-70B-Japanese-Instruct-2407",
+    servedModelName: "llama-3.1-70b-ja",
     routePrefix: "llama-3.3-70b",
     instanceType: "g7e.12xlarge",
     nlbListenerPort: 8080,
     tensorParallelSize: 2,
     maxModelLen: 8192,
     ebsSizeGb: 500,
-    gated: true,
+    gated: false,
     extraVllmArgs: "--dtype bfloat16",
   },
 ];
