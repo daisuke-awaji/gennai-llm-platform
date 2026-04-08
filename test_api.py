@@ -44,12 +44,27 @@ def call(api_key, route, model, prompt, max_tokens=100, stream=False):
         lines = [l for l in data.split("\n") if l.startswith("data: ") and l != "data: [DONE]"]
         chunks = [json.loads(l[6:]) for l in lines]
         content = "".join(c["choices"][0]["delta"].get("content", "") or "" for c in chunks)
-        return {"content": content or "(empty)", "elapsed": elapsed, "chunks": len(chunks)}
+        reasoning = "".join(c["choices"][0]["delta"].get("reasoning", "") or "" for c in chunks)
+        return {
+            "content": content or None,
+            "reasoning": reasoning or None,
+            "text": content or reasoning or "(empty)",
+            "elapsed": elapsed,
+            "chunks": len(chunks),
+        }
     else:
         parsed = json.loads(data)
-        c = parsed["choices"][0]["message"]["content"]
+        msg = parsed["choices"][0]["message"]
+        content = msg.get("content")
+        reasoning = msg.get("reasoning")
         tok = parsed.get("usage", {}).get("completion_tokens", 0)
-        return {"content": c or "(null)", "elapsed": elapsed, "tokens": tok}
+        return {
+            "content": content,
+            "reasoning": reasoning,
+            "text": content or reasoning or "(empty)",
+            "elapsed": elapsed,
+            "tokens": tok,
+        }
 
 
 def test_health(api_key):
@@ -103,8 +118,9 @@ def test_chat(api_key):
     prompt = "1+1は？数字だけ答えて。"
     for m in MODELS:
         try:
-            r = call(api_key, m["route"], m["name"], prompt, max_tokens=10)
-            print(f"  [{m['name']}] {r['content']!r}  ({r['elapsed']:.2f}s, {r['tokens']}tok)")
+            r = call(api_key, m["route"], m["name"], prompt, max_tokens=256)
+            src = "content" if r["content"] else "reasoning"
+            print(f"  [{m['name']}] {r['text']!r}  ({r['elapsed']:.2f}s, {r['tokens']}tok, via {src})")
         except Exception as e:
             print(f"  [{m['name']}] ❌ {e}")
     print()
@@ -117,8 +133,9 @@ def test_stream(api_key):
     prompt = "「吾輩は猫である」の作者は？"
     for m in MODELS:
         try:
-            r = call(api_key, m["route"], m["name"], prompt, max_tokens=30, stream=True)
-            print(f"  [{m['name']}] {r['content']!r}  ({r['elapsed']:.2f}s, {r['chunks']} chunks)")
+            r = call(api_key, m["route"], m["name"], prompt, max_tokens=256, stream=True)
+            src = "content" if r["content"] else "reasoning"
+            print(f"  [{m['name']}] {r['text'][:100]!r}  ({r['elapsed']:.2f}s, {r['chunks']} chunks, via {src})")
         except Exception as e:
             print(f"  [{m['name']}] ❌ {e}")
     print()
@@ -131,10 +148,10 @@ def test_japanese(api_key):
     prompt = "「五月雨を集めて早し最上川」この俳句の作者と季語を答えてください。"
     for m in MODELS:
         try:
-            r = call(api_key, m["route"], m["name"], prompt, max_tokens=80)
-            content = r['content'] or "(null)"
-            print(f"  [{m['name']}] ({r['elapsed']:.2f}s)")
-            print(f"    {content[:200]}")
+            r = call(api_key, m["route"], m["name"], prompt, max_tokens=512)
+            src = "content" if r["content"] else "reasoning"
+            print(f"  [{m['name']}] ({r['elapsed']:.2f}s, via {src})")
+            print(f"    {r['text'][:300]}")
         except Exception as e:
             print(f"  [{m['name']}] ❌ {e}")
     print()
@@ -149,7 +166,7 @@ def test_latency(api_key):
         times = []
         for i in range(3):
             try:
-                r = call(api_key, m["route"], m["name"], prompt, max_tokens=5)
+                r = call(api_key, m["route"], m["name"], prompt, max_tokens=50)
                 times.append(r["elapsed"])
             except Exception as e:
                 times.append(-1)
